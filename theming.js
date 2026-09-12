@@ -251,6 +251,12 @@ export class ThemeManager {
      */
     _adjustTheme() {
         const {settings} = Docking.DockManager;
+                // Dynamic corner radius: radius = iconSize × roundness. This bypasses
+        // every hardcoded border-radius in the stylesheet because inline
+        // styles on the actor win over stylesheet rules in St.
+        const radius = Math.max(0, Math.round(
+            (settings.dashMaxIconSize ?? 48) * (settings.dockRoundness ?? 0.625)));
+        const radiusStyle = `border-radius: ${radius}px; `;
 
         // Remove prior style edits
         this._dash._background.set_style(null);
@@ -285,7 +291,7 @@ export class ThemeManager {
         if (newStyle) {
             // I do call set_style possibly twice so that only the background gets the transition.
             // The transition-property css rules seems to be unsupported
-            this._dash._background.set_style(newStyle);
+            this._dash._background.set_style(radiusStyle + newStyle);
         }
 
         // Customize background
@@ -297,7 +303,7 @@ export class ThemeManager {
             newStyle = `${newStyle}background-color:${this._customizedBackground}; ` +
                        `border-color:${this._customizedBorder}; ` +
                        'transition-delay: 0s; transition-duration: 0.250s;';
-            this._dash._background.set_style(newStyle);
+            this._dash._background.set_style(radiusStyle + newStyle);
         }
     }
 
@@ -313,7 +319,9 @@ export class ThemeManager {
             'custom-theme-shrink',
             'custom-theme-running-dots',
             'extend-height',
-            'force-straight-corner'];
+            'force-straight-corner',
+            'dash-max-icon-size',
+            'dock-roundness'];
 
         this._signalsHandler.addWithLabel(Labels.THEME_CHANGED, ...keys.map(key => [
             Docking.DockManager.settings,

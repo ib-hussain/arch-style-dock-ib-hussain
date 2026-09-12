@@ -26,40 +26,61 @@ function errorDetails(error) {
 
 export default class RiceDockExtension extends Extension.Extension {
     enable() {
+        const phase = (name, fn) => {
+            try {
+                fn();
+            } catch (error) {
+                console.error(`${LOG_PREFIX} phase=${name} result=fail`);
+                console.error(`${LOG_PREFIX} ${errorDetails(error)}`);
+                throw error;
+            }
+        };
+
         this._enabled = true;
         this._extensionListenerId = 0;
         this._shutdownId = 0;
 
-        const logoFile = Gio.File.new_for_path(`${this.path}/media/logo.png`);
-        if (!logoFile.query_exists(null)) {
-            const error = new Error(`Required logo is missing: ${logoFile.get_path()}`);
-            console.error(`${LOG_PREFIX} ${error.message}`);
-            this._enabled = false;
-            throw error;
-        }
-
-        this._extensionListenerId = Main.extensionManager.connect(
-            'extension-state-changed',
-            (_manager, extension) => {
-                if (!CONFLICTING_DOCKS.includes(extension?.uuid))
-                    return;
-
-                try {
-                    this._conditionallyEnableDock();
-                } catch (error) {
-                    console.error(
-                        `${LOG_PREFIX} conflict-state transition failed: ` +
-                        errorDetails(error));
-                }
+        try {
+            phase('logo-check', () => {
+                const logoFile = Gio.File.new_for_path(`${this.path}/media/logo.png`);
+                if (!logoFile.query_exists(null))
+                    throw new Error(`Required logo is missing: ${logoFile.get_path()}`);
             });
 
-        // GNOME 50 does not guarantee disable() during Shell shutdown.
-        this._shutdownId = global.connect('shutdown', () => this.disable());
+            phase('extension-listener', () => {
+                this._extensionListenerId = Main.extensionManager.connect(
+                    'extension-state-changed',
+                    (_manager, extension) => {
+                        if (!CONFLICTING_DOCKS.includes(extension?.uuid))
+                            return;
+                        try {
+                            this._conditionallyEnableDock();
+                        } catch (error) {
+                            console.error(
+                                `${LOG_PREFIX} conflict-state transition failed: ` +
+                                errorDetails(error));
+                        }
+                    });
+            });
 
-        console.log(
-            `${LOG_PREFIX} enabling on GNOME ${Config.PACKAGE_VERSION}; ` +
-            `logo=${logoFile.get_path()}`);
-        this._conditionallyEnableDock();
+            phase('shutdown-listener', () => {
+                this._shutdownId = global.connect('shutdown', () => this.disable());
+            });
+
+            console.log(
+                `${LOG_PREFIX} enabling on GNOME ${Config.PACKAGE_VERSION}; ` +
+                `logo=${this.path}/media/logo.png`);
+
+            phase('dock-manager', () => this._conditionallyEnableDock());
+
+            console.log(`${LOG_PREFIX} phase=enable result=ok`);
+        } catch (error) {
+            this._enabled = false;
+            try {
+                this.disable();
+            } catch { /* best effort */ }
+            throw error;
+        }
     }
 
     _activeConflicts() {

@@ -2081,3 +2081,54 @@
   background-position: 0px 0px;
   background-size: contain;
 }
+/* ============================================================
+ *  Arch Style Dock — theme overrides
+ *  Appended last so these rules win over the upstream base.
+ * ============================================================ */
+
+/* Shared dock shell. Uses the same specificity as the upstream
+ * `#dashtodockContainer.dashtodock #dash .dash-background { background: rgb(...) }`
+ * rule so we cleanly beat it. Do NOT lower this selector. */
+#dashtodockContainer.dashtodock #dash .dash-background {
+  background-color: rgba(224, 210, 238, 0.55); /* Mode C: lavender frosted */
+  background-image: none;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 12px 36px rgba(46, 27, 65, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.5) inset,
+    0 -1px 0 rgba(46, 27, 65, 0.15) inset;
+}
+
+/* Mode A (alternate): frosted glass — engaged via the .arch-theme-frosted
+ * class that docking.js will add in a later step. Same specificity tier. */
+#dashtodockContainer.dashtodock.arch-theme-frosted #dash .dash-background {
+  background-color: rgba(255, 255, 255, 0.13);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.18) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.08) inset;
+}
+
+/* Mode B (reference only): glossy shelf */
+#dashtodockContainer.dashtodock.arch-theme-glossy #dash .dash-background {
+  background-color: rgba(220, 220, 235, 0.35);
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.35) 0%,
+    rgba(255, 255, 255, 0.05) 45%,
+    rgba(255, 255, 255, 0.00) 55%,
+    rgba(255, 255, 255, 0.20) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.4),
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 -1px 2px rgba(255, 255, 255, 0.4) inset;
+}
+
+/* Magnify: anchor scaling to the bottom of the icon */
+.dash-item-container > StButton {
+  transform-origin: center bottom;
+}
+

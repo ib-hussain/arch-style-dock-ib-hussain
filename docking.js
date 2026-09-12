@@ -36,6 +36,7 @@ import {
     Intellihide,
     LauncherAPI,
     Locations,
+    Magnification,
     NotificationsMonitor,
     Theming,
     Utils,
@@ -370,6 +371,7 @@ const DockedDash = GObject.registerClass({
         }
 
         this._themeManager = new Theming.ThemeManager(this);
+        this._magnification = new Magnification.Magnification(this);
         this._signalsHandler.add(this._themeManager, 'updated',
             () => this.dash.resetAppIcons());
 
@@ -492,6 +494,8 @@ const DockedDash = GObject.registerClass({
         this._intellihide.destroy();
         this._themeManager.destroy();
         this._workspaceSwitcherPopup?.destroy();
+        this._magnification?.destroy();
+        this._magnification = null;
         delete this._staticBox;
 
         if (this._marginLater) {
@@ -814,16 +818,40 @@ const DockedDash = GObject.registerClass({
     }
 
     _hoverChanged() {
-        if (!this._ignoreHover) {
-            // Skip if dock is not in autohide mode for instance because it is shown
-            // by intellihide.
-            if (this._autohideIsEnabled) {
-                if (this._box.hover || Main.overview.visible)
-                    this._show();
-                else
-                    this._hide();
-            }
-        }
+        if (this._ignoreHover)
+            return;
+
+        // Skip if dock is not in autohide mode for instance because it is shown
+        // by intellihide.
+        if (!this._autohideIsEnabled)
+            return;
+
+        if (this._isPointerOverDock() || Main.overview.visible)
+            this._show();
+        else
+            this._hide();
+    }
+
+    /**
+     * Robust pointer-over-dock test.
+     *
+     * `_box.hover` cannot be trusted at screen edges: the CSS margin on
+     * `.dash-background` leaves the very last pixel row of the monitor outside the
+     * reactive area, so a pointer parked on the bottom edge reads as "not hovering"
+     * immediately after the dock finishes sliding in — producing the classic
+     * show/hide/show flicker. We instead test the raw pointer coordinates against
+     * the dock's static box (which _updateStaticBox keeps in sync with the
+     * animation) plus a small tolerance.
+     */
+    _isPointerOverDock() {
+        const [pointerX, pointerY] = global.get_pointer();
+        const box = this._staticBox;
+        const tolerance = 8; // px — absorbs the CSS margin and small hand tremor
+
+        return pointerX >= box.x1 - tolerance &&
+            pointerX <= box.x2 + tolerance &&
+            pointerY >= box.y1 - tolerance &&
+            pointerY <= box.y2 + tolerance;
     }
 
     getDockState() {
