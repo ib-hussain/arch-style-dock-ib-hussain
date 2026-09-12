@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-mode="A">
+<html lang="en" data-mode="C">
 <head>
 <meta charset="utf-8">
 <title>Arch Style Dock — Mockup v2</title>
@@ -7,10 +7,11 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 100%; height: 100%; overflow: hidden; }
 
-  :root {
-    --icon-size: 48px;
-    --dock-radius: 24px;
-  }
+:root {
+  --icon-size: 48px;
+  --dock-roundness: 0.625;
+  --dock-radius: calc(var(--icon-size) * var(--dock-roundness));
+}
 
   body {
     font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -155,29 +156,49 @@
       0 -1px 0 rgba(46, 27, 65, 0.15) inset;
   }
 
-  .dock-icon {
-    appearance: none;
-    border: none;
-    background: transparent;
-    padding: 0;
-    width: var(--icon-size);
-    height: var(--icon-size);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transform-origin: center bottom;
-    transition: transform 0.16s cubic-bezier(0.2, 0.9, 0.25, 1);
-    will-change: transform;
-    position: relative;
-  }
-  .dock-icon svg {
-    width: 100%;
-    height: 100%;
-    display: block;
-    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35));
-    pointer-events: none;
-  }
+/* --- Base dock icon (button reset) --- */
+.dock-icon {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  cursor: pointer;
+  transform-origin: center bottom;
+  transition: transform 0.16s cubic-bezier(0.2, 0.9, 0.25, 1);
+  will-change: transform;
+  position: relative;
+
+  /* vertical room below the icon for the running dot */
+  width: var(--icon-size);
+  height: calc(var(--icon-size) + 12px);
+}
+
+.dock-icon:focus,
+.dock-icon:active {
+  background: transparent;
+  outline: none;
+}
+.dock-icon svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+.dock-icon .running-dot {
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background:#000000;
+  box-shadow: 0 0 0 1px #bbb9b9;
+  pointer-events: none;
+}
   /* subtle hover lift when magnification is off */
   .dock:not(.mag-on) .dock-icon:hover {
     transform: translateY(-6px) scale(1.08);
@@ -196,19 +217,19 @@
 
   <div class="controls">
     <span class="label">Mode</span>
-    <button class="mode-btn active" data-mode="A">A · Frosted</button>
-    <button class="mode-btn" data-mode="B">B · Glossy</button>
-    <button class="mode-btn" data-mode="C">C · Navbar</button>
+<button class="mode-btn active" data-mode="C">C · Navbar</button>
+<button class="mode-btn" data-mode="A">A · Frosted</button>
+<button class="mode-btn" data-mode="B">B · Glossy (ref)</button>
     <span class="vsep"></span>
     <span class="label">Icon</span>
     <input type="range" id="sizeSlider" min="32" max="72" value="48">
     <span class="num" id="sizeVal">48</span>
     <span class="vsep"></span>
-    <span class="label">Radius</span>
-    <input type="range" id="radiusSlider" min="8" max="36" value="24">
-    <span class="num" id="radiusVal">24</span>
+<span class="label">Roundness</span>
+<input type="range" id="ratioSlider" min="0.30" max="0.95" step="0.005" value="0.625">
+<span class="num" id="ratioVal">R=30px (0.625×)</span>
     <span class="vsep"></span>
-    <label><input type="checkbox" id="magToggle"> Magnify</label>
+<label><input type="checkbox" id="magToggle" checked> Magnify</label>
     <span class="vsep"></span>
     <span class="label">BG</span>
     <button class="wall-btn active" data-wall="colorful">Colorful</button>
@@ -227,6 +248,7 @@
         <path d="M50 10 L88 90 L12 90 Z" fill="url(#archGrad)"/>
         <path d="M50 10 L88 90 L50 90 Z" fill="#062e4a" opacity="0.35"/>
       </svg>
+  <span class="running-dot"></span>
     </button>
 
     <!-- Nautilus -->
@@ -238,6 +260,7 @@
         <path d="M12 26 Q12 20 18 20 L38 20 L46 28 L82 28 Q88 28 88 34 L88 80 Q88 86 82 86 L18 86 Q12 86 12 80 Z" fill="url(#folderGrad)"/>
         <path d="M12 42 L88 42 L88 80 Q88 86 82 86 L18 86 Q12 86 12 80 Z" fill="#ffe082" opacity="0.45"/>
       </svg>
+  <span class="running-dot"></span>
     </button>
 
     <!-- VS Code -->
@@ -248,6 +271,7 @@
         <path d="M62 34 L74 50 L62 66" stroke="white" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
         <line x1="54" y1="32" x2="46" y2="68" stroke="white" stroke-width="6" stroke-linecap="round"/>
       </svg>
+  <span class="running-dot"></span>
     </button>
 
     <!-- Terminal -->
@@ -262,6 +286,7 @@
         <path d="M26 46 L40 58 L26 70" stroke="#4ec9b0" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
         <line x1="48" y1="70" x2="72" y2="70" stroke="#4ec9b0" stroke-width="5" stroke-linecap="round"/>
       </svg>
+  <span class="running-dot"></span>
     </button>
 
     <!-- Chrome -->
@@ -274,6 +299,7 @@
         <circle cx="50" cy="50" r="17" fill="#4285f4"/>
         <circle cx="50" cy="50" r="17" fill="none" stroke="white" stroke-width="2"/>
       </svg>
+  <span class="running-dot"></span>
     </button>
 
     <!-- Separator -->
@@ -292,21 +318,22 @@
         <line x1="50" y1="44" x2="50" y2="80" stroke="#5a5a64" stroke-width="3" stroke-linecap="round"/>
         <line x1="58" y1="44" x2="58" y2="80" stroke="#5a5a64" stroke-width="3" stroke-linecap="round"/>
       </svg>
+  <span class="running-dot"></span>
     </button>
 
   </div>
 
 <script>
 (function () {
-  const root   = document.documentElement;
-  const body   = document.body;
-  const dock   = document.getElementById('dock');
-  const icons  = Array.from(dock.querySelectorAll('.dock-icon'));
+  const root         = document.documentElement;
+  const body         = document.body;
+  const dock         = document.getElementById('dock');
+  const icons        = Array.from(dock.querySelectorAll('.dock-icon'));
   const magToggle    = document.getElementById('magToggle');
   const sizeSlider   = document.getElementById('sizeSlider');
   const sizeVal      = document.getElementById('sizeVal');
-  const radiusSlider = document.getElementById('radiusSlider');
-  const radiusVal    = document.getElementById('radiusVal');
+  const ratioSlider  = document.getElementById('ratioSlider');
+  const ratioVal     = document.getElementById('ratioVal');
 
   /* ---------- Mode toggle ---------- */
   document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -326,36 +353,37 @@
     });
   });
 
-  /* ---------- Live sliders ---------- */
+  /* ---------- Icon size slider ---------- */
   sizeSlider.addEventListener('input', () => {
     root.style.setProperty('--icon-size', sizeSlider.value + 'px');
     sizeVal.textContent = sizeSlider.value;
+    updateRatioLabel();
     requestAnimationFrame(measure);
   });
-  radiusSlider.addEventListener('input', () => {
-    root.style.setProperty('--dock-radius', radiusSlider.value + 'px');
-    radiusVal.textContent = radiusSlider.value;
+
+  /* ---------- Roundness slider (drives --dock-roundness) ---------- */
+  function updateRatioLabel() {
+    const size  = parseFloat(sizeSlider.value);
+    const ratio = parseFloat(ratioSlider.value);
+    const px    = Math.round(size * ratio);
+    ratioVal.textContent = `R=${px}px (${ratio.toFixed(3)}×)`;
+  }
+  ratioSlider.addEventListener('input', () => {
+    root.style.setProperty('--dock-roundness', ratioSlider.value);
+    updateRatioLabel();
   });
 
-  /* ---------- Magnification ---------- */
-  // Linear-squared falloff with a hard cutoff.
-  //   weight(d) = (1 - |d| / R)^2   for |d| < R, else 0
-  //   scale     = 1 + STRENGTH * weight
-  //   lift      = LIFT_PEAK  * weight
-  //
-  // At R = 70 and STRENGTH = 0.6, an adjacent icon (≈56px away on 48px icons
-  // with 8px gap) gets weight ≈ 0.04 → scale ≈ 1.02. Barely moves. Only the
-  // hovered icon and its immediate visual neighbors react.
+  /* ---------- Magnification (linear-squared falloff, hard cutoff) ---------- */
   const STRENGTH  = 0.6;
-  const R         = 70;   // influence radius in CSS px
+  const R         = 70;
   const LIFT_PEAK = 16;
 
-  let magnify = false;
+  let magnify = magToggle.checked;
   let baseCenters = [];
 
+  if (magnify) dock.classList.add('mag-on');
+
   function measure() {
-    // Clear transforms temporarily so getBoundingClientRect reads
-    // the *unscaled* layout centers.
     const saved = icons.map(i => i.style.transform);
     icons.forEach(i => { i.style.transform = ''; });
     baseCenters = icons.map(i => {
@@ -392,7 +420,7 @@
 
   window.addEventListener('resize', measure);
 
-  // Fonts / images may shift layout by a few px. Re-measure on next tick.
+  updateRatioLabel();
   requestAnimationFrame(measure);
 })();
 </script>

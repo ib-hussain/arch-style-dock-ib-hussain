@@ -7,7 +7,7 @@ import {Extension} from './dependencies/shell/extensions/extension.js';
 
 import {DockManager} from './docking.js';
 
-const LOG_PREFIX = '[rice-dock@ib-hussain]';
+const LOG_PREFIX = '[arch-style-dock@ib-hussain]';
 const CONFLICTING_DOCKS = Object.freeze([
     'ubuntu-dock@ubuntu.com',
     'dash-to-dock@micxgx.gmail.com',

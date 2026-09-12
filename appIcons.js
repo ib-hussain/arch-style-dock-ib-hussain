@@ -1461,7 +1461,7 @@ export const DockShowAppsIcon = GObject.registerClass({
 
         this._maybeEnablePopupGestures();
         console.log(
-            '[rice-dock@ib-hussain] isolated Show Applications logo from shell-theme artwork');
+            '[arch-style-dock@ib-hussain] isolated Show Applications logo from shell-theme artwork');
     }
 
     _createIcon(size) {
