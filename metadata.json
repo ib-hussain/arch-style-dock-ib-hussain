@@ -1,20 +1,12 @@
 {
-  "shell-version": [
-    "45",
-    "46",
-    "47",
-    "48",
-    "49",
-    "50",
-    "51"
-  ],
-  "uuid": "rice-dock@ib-hussain",
-  "name": "Rice Dock",
-  "description": "A cross-distribution GNOME dock for Ibrahim's Arch and Ubuntu rice, with a single built-in Show Applications logo.",
-  "settings-schema": "org.gnome.shell.extensions.dash-to-dock",
+  "shell-version": ["45", "46", "47", "48", "49", "50", "51"],
+  "uuid": "arch-style-dock@ib-hussain",
+  "name": "Arch Style Dock",
+  "description": "A macOS-style glossy dock for GNOME, built for Arch and Ubuntu. Fork of Dash-to-Dock by Ibrahim Hussain.",
+  "settings-schema": "org.gnome.shell.extensions.arch-style-dock",
   "original-author": "micxgx@gmail.com",
-  "url": "https://github.com/ib-hussain/ubuntuRicePack",
-  "gettext-domain": "dashtodock",
-  "version": 2,
-  "version-name": "1.0.1"
+  "url": "https://github.com/ib-hussain/arch-style-dock",
+  "gettext-domain": "archstyledock",
+  "version": 1,
+  "version-name": "0.1.0"
 }

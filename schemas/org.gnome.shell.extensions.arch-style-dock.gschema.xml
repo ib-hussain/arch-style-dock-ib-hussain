@@ -50,7 +50,7 @@
     <value value='8' nick='BINARY'/>
     <value value='9' nick='DOT'/>
   </enum>
-  <schema path="/org/gnome/shell/extensions/dash-to-dock/" id="org.gnome.shell.extensions.dash-to-dock">
+  <schema path="/org/gnome/shell/extensions/arch-style-dock/" id="org.gnome.shell.extensions.arch-style-dock">
     <key name="dock-position" enum="org.gnome.shell.extensions.dash-to-dock.position">
       <default>'BOTTOM'</default>
       <summary>Dock position</summary>

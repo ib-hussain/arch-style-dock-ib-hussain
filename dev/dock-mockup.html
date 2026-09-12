@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en" data-mode="A">
+<head>
+<meta charset="utf-8">
+<title>Arch Style Dock — Mockup v2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+
+  :root {
+    --icon-size: 48px;
+    --dock-radius: 24px;
+  }
+
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 28px;
+    transition: background 0.4s ease;
+  }
+  body[data-wallpaper="colorful"] {
+    background:radial-gradient(
+        circle at 20% 20%,
+      rgb(196, 255, 250) 0%, 
+      rgba(255, 237, 188, 1) 30%, 
+      rgba(236, 217, 255, 1) 55%, 
+      rgba(202, 224, 255, 1) 80%
+  );
+  }
+  body[data-wallpaper="mono"] {
+    background: linear-gradient(135deg, #1a1a1f 0%, #0a0a0c 100%);
+  }
+  body[data-wallpaper="photo"] {
+    background:
+      linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.35) 100%),
+      linear-gradient(135deg,
+        #6a11cb 0%, #2575fc 25%, #43cea2 55%, #f7b733 85%, #fc4a1a 100%);
+  }
+
+  /* ---------- Control bar ---------- */
+  .controls {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: rgba(20, 20, 30, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    color: #fff;
+    font-size: 13px;
+    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    flex-wrap: wrap;
+    max-width: 92vw;
+  }
+  .controls .label { opacity: 0.55; margin-right: 2px; }
+  .controls button {
+    appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.06);
+    color: #fff;
+    font: inherit;
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .controls button:hover { background: rgba(255, 255, 255, 0.14); }
+  .controls button.active {
+    background: rgba(120, 170, 255, 0.4);
+    border-color: rgba(120, 170, 255, 0.8);
+  }
+  .controls .vsep {
+    width: 1px; height: 20px;
+    background: rgba(255, 255, 255, 0.2);
+    margin: 0 4px;
+  }
+  .controls label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .controls input[type="range"] { width: 90px; }
+  .controls .num {
+    display: inline-block;
+    min-width: 34px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.85;
+  }
+
+  /* ---------- Dock ---------- */
+  .dock {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: var(--dock-radius);
+    transition: border-radius 0.25s, background 0.3s, box-shadow 0.3s;
+    transform: translateZ(0);
+  }
+
+  /* --- A: Big Sur / Sonoma frosted glass --- */
+  html[data-mode="A"] .dock {
+    background: rgba(255, 255, 255, 0.13);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow:
+      0 12px 36px rgba(0, 0, 0, 0.35),
+      0 1px 0 rgba(255, 255, 255, 0.18) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.08) inset;
+  }
+
+  /* --- B: Yosemite glossy shelf (kept for reference) --- */
+  html[data-mode="B"] .dock {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.55) 0%,
+      rgba(220, 220, 235, 0.30) 42%,
+      rgba(90, 90, 110, 0.25) 50%,
+      rgba(220, 220, 235, 0.30) 58%,
+      rgba(255, 255, 255, 0.55) 100%
+    );
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow:
+      0 12px 32px rgba(0, 0, 0, 0.4),
+      0 1px 0 rgba(255, 255, 255, 0.8) inset,
+      0 -1px 2px rgba(255, 255, 255, 0.4) inset,
+      0 -6px 14px rgba(0, 0, 0, 0.18) inset;
+  }
+
+  /* --- C: Navbar lavender frosted (from example_dock/navbar.css .scrolled) --- */
+  html[data-mode="C"] .dock {
+    background: rgba(224, 210, 238, 0.55);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow:
+      0 12px 36px rgba(46, 27, 65, 0.35),
+      0 1px 0 rgba(255, 255, 255, 0.5) inset,
+      0 -1px 0 rgba(46, 27, 65, 0.15) inset;
+  }
+
+  .dock-icon {
+    appearance: none;
+    border: none;
+    background: transparent;
+    padding: 0;
+    width: var(--icon-size);
+    height: var(--icon-size);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transform-origin: center bottom;
+    transition: transform 0.16s cubic-bezier(0.2, 0.9, 0.25, 1);
+    will-change: transform;
+    position: relative;
+  }
+  .dock-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35));
+    pointer-events: none;
+  }
+  /* subtle hover lift when magnification is off */
+  .dock:not(.mag-on) .dock-icon:hover {
+    transform: translateY(-6px) scale(1.08);
+  }
+
+  /* --- Separator: matches current stylesheet (thin white 10% line) --- */
+  .dock-sep {
+    width: 1px;
+    align-self: stretch;
+    margin: 6px 6px 10px 6px;
+    background: rgba(255, 255, 255, 0.1);
+  }
+</style>
+</head>
+<body data-wallpaper="colorful">
+
+  <div class="controls">
+    <span class="label">Mode</span>
+    <button class="mode-btn active" data-mode="A">A · Frosted</button>
+    <button class="mode-btn" data-mode="B">B · Glossy</button>
+    <button class="mode-btn" data-mode="C">C · Navbar</button>
+    <span class="vsep"></span>
+    <span class="label">Icon</span>
+    <input type="range" id="sizeSlider" min="32" max="72" value="48">
+    <span class="num" id="sizeVal">48</span>
+    <span class="vsep"></span>
+    <span class="label">Radius</span>
+    <input type="range" id="radiusSlider" min="8" max="36" value="24">
+    <span class="num" id="radiusVal">24</span>
+    <span class="vsep"></span>
+    <label><input type="checkbox" id="magToggle"> Magnify</label>
+    <span class="vsep"></span>
+    <span class="label">BG</span>
+    <button class="wall-btn active" data-wall="colorful">Colorful</button>
+    <button class="wall-btn" data-wall="mono">Dark</button>
+    <button class="wall-btn" data-wall="photo">Photo</button>
+  </div>
+
+  <div class="dock" id="dock">
+
+    <!-- Arch -->
+    <button class="dock-icon" title="Arch">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <defs><linearGradient id="archGrad" x1="0.5" y1="0" x2="0.5" y2="1">
+          <stop offset="0" stop-color="#58c4f5"/><stop offset="1" stop-color="#0e5b8e"/>
+        </linearGradient></defs>
+        <path d="M50 10 L88 90 L12 90 Z" fill="url(#archGrad)"/>
+        <path d="M50 10 L88 90 L50 90 Z" fill="#062e4a" opacity="0.35"/>
+      </svg>
+    </button>
+
+    <!-- Nautilus -->
+    <button class="dock-icon" title="Files">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <defs><linearGradient id="folderGrad" x1="0.5" y1="0" x2="0.5" y2="1">
+          <stop offset="0" stop-color="#ffd54f"/><stop offset="1" stop-color="#ef9a00"/>
+        </linearGradient></defs>
+        <path d="M12 26 Q12 20 18 20 L38 20 L46 28 L82 28 Q88 28 88 34 L88 80 Q88 86 82 86 L18 86 Q12 86 12 80 Z" fill="url(#folderGrad)"/>
+        <path d="M12 42 L88 42 L88 80 Q88 86 82 86 L18 86 Q12 86 12 80 Z" fill="#ffe082" opacity="0.45"/>
+      </svg>
+    </button>
+
+    <!-- VS Code -->
+    <button class="dock-icon" title="Code">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <rect x="10" y="10" width="80" height="80" rx="16" fill="#0078d4"/>
+        <path d="M38 34 L26 50 L38 66" stroke="white" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M62 34 L74 50 L62 66" stroke="white" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="54" y1="32" x2="46" y2="68" stroke="white" stroke-width="6" stroke-linecap="round"/>
+      </svg>
+    </button>
+
+    <!-- Terminal -->
+    <button class="dock-icon" title="Terminal">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <rect x="10" y="10" width="80" height="80" rx="16" fill="#1f1f23"/>
+        <rect x="10" y="10" width="80" height="22" rx="16" fill="#2a2a30"/>
+        <rect x="10" y="24" width="80" height="8" fill="#2a2a30"/>
+        <circle cx="22" cy="21" r="3" fill="#ff5f56"/>
+        <circle cx="34" cy="21" r="3" fill="#ffbd2e"/>
+        <circle cx="46" cy="21" r="3" fill="#27c93f"/>
+        <path d="M26 46 L40 58 L26 70" stroke="#4ec9b0" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="48" y1="70" x2="72" y2="70" stroke="#4ec9b0" stroke-width="5" stroke-linecap="round"/>
+      </svg>
+    </button>
+
+    <!-- Chrome -->
+    <button class="dock-icon" title="Chrome">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M50 50 L13.6 29 A42 42 0 0 1 86.4 29 Z" fill="#ea4335"/>
+        <path d="M50 50 L86.4 29 A42 42 0 0 1 50 92 Z" fill="#34a853"/>
+        <path d="M50 50 L50 92 A42 42 0 0 1 13.6 29 Z" fill="#fbbc05"/>
+        <circle cx="50" cy="50" r="42" fill="none" stroke="white" stroke-width="2"/>
+        <circle cx="50" cy="50" r="17" fill="#4285f4"/>
+        <circle cx="50" cy="50" r="17" fill="none" stroke="white" stroke-width="2"/>
+      </svg>
+    </button>
+
+    <!-- Separator -->
+    <div class="dock-sep"></div>
+
+    <!-- Trash -->
+    <button class="dock-icon" title="Trash">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <defs><linearGradient id="trashGrad" x1="0.5" y1="0" x2="0.5" y2="1">
+          <stop offset="0" stop-color="#c8c8cf"/><stop offset="1" stop-color="#7a7a85"/>
+        </linearGradient></defs>
+        <rect x="40" y="12" width="20" height="12" rx="3" fill="#a0a0aa"/>
+        <rect x="20" y="22" width="60" height="9" rx="3" fill="#a0a0aa"/>
+        <path d="M26 32 L74 32 L70 88 Q70 92 66 92 L34 92 Q30 92 30 88 Z" fill="url(#trashGrad)"/>
+        <line x1="42" y1="44" x2="42" y2="80" stroke="#5a5a64" stroke-width="3" stroke-linecap="round"/>
+        <line x1="50" y1="44" x2="50" y2="80" stroke="#5a5a64" stroke-width="3" stroke-linecap="round"/>
+        <line x1="58" y1="44" x2="58" y2="80" stroke="#5a5a64" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+    </button>
+
+  </div>
+
+<script>
+(function () {
+  const root   = document.documentElement;
+  const body   = document.body;
+  const dock   = document.getElementById('dock');
+  const icons  = Array.from(dock.querySelectorAll('.dock-icon'));
+  const magToggle    = document.getElementById('magToggle');
+  const sizeSlider   = document.getElementById('sizeSlider');
+  const sizeVal      = document.getElementById('sizeVal');
+  const radiusSlider = document.getElementById('radiusSlider');
+  const radiusVal    = document.getElementById('radiusVal');
+
+  /* ---------- Mode toggle ---------- */
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      root.dataset.mode = btn.dataset.mode;
+      document.querySelectorAll('.mode-btn').forEach(b =>
+        b.classList.toggle('active', b === btn));
+    });
+  });
+
+  /* ---------- Wallpaper toggle ---------- */
+  document.querySelectorAll('.wall-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      body.dataset.wallpaper = btn.dataset.wall;
+      document.querySelectorAll('.wall-btn').forEach(b =>
+        b.classList.toggle('active', b === btn));
+    });
+  });
+
+  /* ---------- Live sliders ---------- */
+  sizeSlider.addEventListener('input', () => {
+    root.style.setProperty('--icon-size', sizeSlider.value + 'px');
+    sizeVal.textContent = sizeSlider.value;
+    requestAnimationFrame(measure);
+  });
+  radiusSlider.addEventListener('input', () => {
+    root.style.setProperty('--dock-radius', radiusSlider.value + 'px');
+    radiusVal.textContent = radiusSlider.value;
+  });
+
+  /* ---------- Magnification ---------- */
+  // Linear-squared falloff with a hard cutoff.
+  //   weight(d) = (1 - |d| / R)^2   for |d| < R, else 0
+  //   scale     = 1 + STRENGTH * weight
+  //   lift      = LIFT_PEAK  * weight
+  //
+  // At R = 70 and STRENGTH = 0.6, an adjacent icon (≈56px away on 48px icons
+  // with 8px gap) gets weight ≈ 0.04 → scale ≈ 1.02. Barely moves. Only the
+  // hovered icon and its immediate visual neighbors react.
+  const STRENGTH  = 0.6;
+  const R         = 70;   // influence radius in CSS px
+  const LIFT_PEAK = 16;
+
+  let magnify = false;
+  let baseCenters = [];
+
+  function measure() {
+    // Clear transforms temporarily so getBoundingClientRect reads
+    // the *unscaled* layout centers.
+    const saved = icons.map(i => i.style.transform);
+    icons.forEach(i => { i.style.transform = ''; });
+    baseCenters = icons.map(i => {
+      const r = i.getBoundingClientRect();
+      return (r.left + r.right) / 2;
+    });
+    icons.forEach((i, idx) => { i.style.transform = saved[idx]; });
+  }
+
+  function resetIcons() {
+    icons.forEach(i => { i.style.transform = ''; });
+  }
+
+  magToggle.addEventListener('change', () => {
+    magnify = magToggle.checked;
+    dock.classList.toggle('mag-on', magnify);
+    if (magnify) measure(); else resetIcons();
+  });
+
+  dock.addEventListener('mousemove', e => {
+    if (!magnify) return;
+    icons.forEach((icon, i) => {
+      const d = Math.abs(e.clientX - baseCenters[i]);
+      const w = d < R ? (1 - d / R) * (1 - d / R) : 0;
+      const scale = 1 + STRENGTH * w;
+      const lift  = LIFT_PEAK  * w;
+      icon.style.transform = `translateY(${-lift}px) scale(${scale})`;
+    });
+  });
+
+  dock.addEventListener('mouseleave', () => {
+    if (magnify) resetIcons();
+  });
+
+  window.addEventListener('resize', measure);
+
+  // Fonts / images may shift layout by a few px. Re-measure on next tick.
+  requestAnimationFrame(measure);
+})();
+</script>
+
+</body>
+</html>
