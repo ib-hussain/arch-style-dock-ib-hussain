@@ -275,6 +275,16 @@ const DockedDash = GObject.registerClass({
         this._dockWatch = null;
         this._dockDwellUserTime = 0;
         this._dockDwellTimeoutId = 0;
+            // Pointer-tick driven autohide. The old `_box.hover` signal cannot be
+        // trusted during the slide animation: as the reactive area shrinks past
+        // the pointer, hover flips false, we cancel the hide, the dock snaps
+        // back, and the pattern repeats — the "twitch" users see on the bottom
+        // edge. We instead poll the raw pointer with the same PointerWatcher the
+        // dock already uses for dwell checks, and enforce show/hide delays with
+        // explicit GLib timers that cannot be cancelled by the animation.
+        this._pointerWatchId = 0;
+        this._pendingShowId = 0;
+        this._pendingHideId = 0;
 
         // Create a new dash object
         this.dash = new DockDash.DockDash(this.monitorIndex);
@@ -302,7 +312,7 @@ const DockedDash = GObject.registerClass({
             reactive: true,
             track_hover: true,
         });
-        this._box.connect('notify::hover', this._hoverChanged.bind(this));
+        // this._box.connect('notify::hover', this._hoverChanged.bind(this));
 
         // Connect global signals
         this._signalsHandler = new Utils.GlobalSignalsHandler(this);
@@ -409,9 +419,11 @@ const DockedDash = GObject.registerClass({
                     this._signalsHandler.removeWithLabel(Labels.STARTUP_ANIMATION);
                     this._trackDock();
                     this._initialize();
+                    this._installPointerWatch();
                 });
         } else {
             this._trackDock();
+            this._installPointerWatch();
             // Show the dock only once fully initialized. This workarounds a
             // resize glitch we are seeing if the dock is initialized without
             // an animation.
@@ -493,9 +505,17 @@ const DockedDash = GObject.registerClass({
         this.dash.destroy();
         this._intellihide.destroy();
         this._themeManager.destroy();
-        this._workspaceSwitcherPopup?.destroy();
         this._magnification?.destroy();
         this._magnification = null;
+        this._workspaceSwitcherPopup?.destroy();
+
+        // Autohide state machine teardown. Order matters: kill the pointer
+        // watch first so no further ticks come in, then cancel the pending
+        // timers, then free the static box the tick handler reads.
+        this._removePointerWatch();
+        this._cancelPendingShow();
+        this._cancelPendingHide();
+
         delete this._staticBox;
 
         if (this._marginLater) {
@@ -515,7 +535,7 @@ const DockedDash = GObject.registerClass({
         // Remove existing barrier
         this._removeBarrier();
 
-        // Remove pointer watcher
+        // Remove dwell pointer watcher (legacy path; harmless if unused)
         if (this._dockWatch) {
             PointerWatcher.getPointerWatcher()._removeWatch(this._dockWatch);
             this._dockWatch = null;
@@ -528,18 +548,11 @@ const DockedDash = GObject.registerClass({
     }
 
     _updateAutoHideBarriers() {
-        // Remove pointer watcher
-        if (this._dockWatch) {
-            PointerWatcher.getPointerWatcher()._removeWatch(this._dockWatch);
-            this._dockWatch = null;
-        }
-
-        // Setup pressure barrier (GS38+ only)
+        // The old dwell / pressure path is superseded by _pointerTick().
+        // Barriers are still useful for multi-monitor edge magnetisation,
+        // but they are not part of the show decision anymore.
         this._updatePressureBarrier();
         this._updateBarrier();
-
-        // setup dwelling system if pressure barriers are not available
-        this._setupDockDwellIfNeeded();
     }
 
     _bindSettingsChanges() {
@@ -752,6 +765,8 @@ const DockedDash = GObject.registerClass({
     _updateDashVisibility() {
         if (DockManager.settings.manualhide) {
             this._ignoreHover = true;
+            this._cancelPendingShow();
+            this._cancelPendingHide();
             this._removeAnimations();
             this._animateOut(0, 0);
             return;
@@ -760,32 +775,18 @@ const DockedDash = GObject.registerClass({
         if (Main.overview.visibleTarget)
             return;
 
-        const {settings} = DockManager;
-
         if (DockManager.settings.dockFixed) {
+            this._cancelPendingShow();
+            this._cancelPendingHide();
             this._removeAnimations();
-            this._animateIn(settings.animationTime, 0);
-        } else if (this._intellihideIsEnabled) {
-            if (!this.dash.requiresVisibility && this._intellihide.getOverlapStatus()) {
-                this._ignoreHover = false;
-                // Do not hide if autohide is enabled and mouse is hover
-                if (!this._box.hover || !this._autohideIsEnabled)
-                    this._animateOut(settings.animationTime, 0);
-            } else {
-                this._ignoreHover = true;
-                this._removeAnimations();
-                this._animateIn(settings.animationTime, 0);
-            }
-        } else if (this._autohideIsEnabled) {
-            this._ignoreHover = false;
-
-            if (this._box.hover || this.dash.requiresVisibility)
-                this._animateIn(settings.animationTime, 0);
-            else
-                this._animateOut(settings.animationTime, 0);
-        } else {
-            this._animateOut(settings.animationTime, 0);
+            this._animateIn(DockManager.settings.animationTime, 0);
+            return;
         }
+
+        // For any other mode (autohide or intellihide), the pointer tick
+        // decides. Kick it once so the state updates immediately rather than
+        // waiting up to 100 ms for the next poll.
+        this._pointerTick();
     }
 
     _onOverviewShowing() {
@@ -817,41 +818,158 @@ const DockedDash = GObject.registerClass({
         this._updateDashVisibility();
     }
 
-    _hoverChanged() {
+    /* ------------------------------------------------------------------ */
+    /* Autohide state machine                                              */
+    /* ------------------------------------------------------------------ */
+
+    _installPointerWatch() {
+        if (this._pointerWatchId)
+            return;
+        try {
+            this._pointerWatchId =
+                PointerWatcher.getPointerWatcher().addWatch(
+                    100, () => this._pointerTick());
+        } catch (e) {
+            console.error(`[arch-style-dock] pointer watch failed: ${e}`);
+        }
+    }
+
+    _removePointerWatch() {
+        if (!this._pointerWatchId)
+            return;
+        try {
+            PointerWatcher.getPointerWatcher()._removeWatch(this._pointerWatchId);
+        } catch (e) {
+            console.error(`[arch-style-dock] pointer unwatch failed: ${e}`);
+        }
+        this._pointerWatchId = 0;
+    }
+
+    _pointerTick() {
+        // Never fight the overview or a menu.
+        if (Main.overview.visibleTarget) {
+            this._cancelPendingShow();
+            this._cancelPendingHide();
+            return;
+        }
+
+        if (!this._autohideIsEnabled) {
+            // Fixed / manualhide / intellihide-only: not our job here.
+            this._cancelPendingShow();
+            this._cancelPendingHide();
+            return;
+        }
+
         if (this._ignoreHover)
             return;
 
-        // Skip if dock is not in autohide mode for instance because it is shown
-        // by intellihide.
-        if (!this._autohideIsEnabled)
+        if (this.dash.requiresVisibility) {
+            this._cancelPendingHide();
+            this._scheduleShow();
             return;
+        }
 
-        if (this._isPointerOverDock() || Main.overview.visible)
-            this._show();
-        else
-            this._hide();
+        const [x, y] = global.get_pointer();
+        if (this._pointerWantsDock(x, y)) {
+            this._cancelPendingHide();
+            this._scheduleShow();
+        } else {
+            this._cancelPendingShow();
+            this._scheduleHide();
+        }
     }
 
     /**
-     * Robust pointer-over-dock test.
-     *
-     * `_box.hover` cannot be trusted at screen edges: the CSS margin on
-     * `.dash-background` leaves the very last pixel row of the monitor outside the
-     * reactive area, so a pointer parked on the bottom edge reads as "not hovering"
-     * immediately after the dock finishes sliding in — producing the classic
-     * show/hide/show flicker. We instead test the raw pointer coordinates against
-     * the dock's static box (which _updateStaticBox keeps in sync with the
-     * animation) plus a small tolerance.
+     * True when the pointer is in one of the two "wake zones":
+     *  1. Within 2 px of the screen edge on the dock's side (the classic
+     *     "push to the edge" trigger).
+     *  2. Anywhere over the shown-dock rectangle, with 4 px of hysteresis
+     *     so the dock doesn't disappear the instant you graze a few pixels
+     *     off the icon row while reaching for an icon.
      */
-    _isPointerOverDock() {
-        const [pointerX, pointerY] = global.get_pointer();
-        const box = this._staticBox;
-        const tolerance = 8; // px — absorbs the CSS margin and small hand tremor
+    _pointerWantsDock(x, y) {
+        const monitor = this._monitor;
+        if (!monitor)
+            return false;
 
-        return pointerX >= box.x1 - tolerance &&
-            pointerX <= box.x2 + tolerance &&
-            pointerY >= box.y1 - tolerance &&
-            pointerY <= box.y2 + tolerance;
+        if (this._position === St.Side.BOTTOM) {
+            if (y >= monitor.y + monitor.height - 2 &&
+                x >= monitor.x && x <= monitor.x + monitor.width)
+                return true;
+        } else if (this._position === St.Side.TOP) {
+            if (y <= monitor.y + 2 &&
+                x >= monitor.x && x <= monitor.x + monitor.width)
+                return true;
+        } else if (this._position === St.Side.LEFT) {
+            if (x <= monitor.x + 2 &&
+                y >= monitor.y && y <= monitor.y + monitor.height)
+                return true;
+        } else if (this._position === St.Side.RIGHT) {
+            if (x >= monitor.x + monitor.width - 2 &&
+                y >= monitor.y && y <= monitor.y + monitor.height)
+                return true;
+        }
+
+        const box = this._staticBox;
+        if (!box || !box.x2)
+            return false;
+        const tol = 4;
+        return x >= box.x1 - tol && x <= box.x2 + tol &&
+               y >= box.y1 - tol && y <= box.y2 + tol;
+    }
+
+    _scheduleShow() {
+        if (this._pendingShowId)
+            return;
+        const state = this._dockState;
+        if (state === State.SHOWN || state === State.SHOWING)
+            return;
+
+        const delay = Math.max(0, (DockManager.settings.showDelay ?? 0) * 1000);
+        if (delay === 0) {
+            this._show();
+            return;
+        }
+        this._pendingShowId = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT, delay, () => {
+                this._pendingShowId = 0;
+                this._show();
+                return GLib.SOURCE_REMOVE;
+            });
+    }
+
+    _scheduleHide() {
+        if (this._pendingHideId)
+            return;
+        const state = this._dockState;
+        if (state === State.HIDDEN || state === State.HIDING)
+            return;
+
+        const delay = Math.max(0, (DockManager.settings.hideDelay ?? 0) * 1000);
+        if (delay === 0) {
+            this._hide();
+            return;
+        }
+        this._pendingHideId = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT, delay, () => {
+                this._pendingHideId = 0;
+                this._hide();
+                return GLib.SOURCE_REMOVE;
+            });
+    }
+
+    _cancelPendingShow() {
+        if (this._pendingShowId) {
+            GLib.source_remove(this._pendingShowId);
+            this._pendingShowId = 0;
+        }
+    }
+
+    _cancelPendingHide() {
+        if (this._pendingHideId) {
+            GLib.source_remove(this._pendingHideId);
+            this._pendingHideId = 0;
+        }
     }
 
     getDockState() {
@@ -929,6 +1047,10 @@ const DockedDash = GObject.registerClass({
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             onComplete: () => {
                 this._dockState = State.HIDDEN;
+                // Reset the dwell latch so the next edge touch can retrigger
+                // a fresh dwell timer. Without this, a single hide while the
+                // pointer is parked at the edge strands the dock hidden.
+                this._dockDwelling = false;
                 if (this._intellihideIsEnabled)
                     this._restoreUnredirect();
                 // Remove queued barrier removal timeout if any
@@ -1070,58 +1192,7 @@ const DockedDash = GObject.registerClass({
     _onPressureSensed() {
         if (Main.overview.visibleTarget)
             return;
-
-        if (this._triggerTimeoutId)
-            GLib.source_remove(this._triggerTimeoutId);
-
-        // In case the mouse move away from the dock area before hovering it,
-        // in such case the leave event would never be triggered and the dock
-        // would stay visible forever.
-        this._triggerTimeoutId =  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
-            const [x, y, mods_] = global.get_pointer();
-            let shouldHide = true;
-            switch (this._position) {
-            case St.Side.LEFT:
-                if (x <= this._staticBox.x2 &&
-                    x >= this._monitor.x &&
-                    y >= this._monitor.y &&
-                    y <= this._monitor.y + this._monitor.height)
-                    shouldHide = false;
-
-                break;
-            case St.Side.RIGHT:
-                if (x >= this._staticBox.x1 &&
-                    x <= this._monitor.x + this._monitor.width &&
-                    y >= this._monitor.y &&
-                    y <= this._monitor.y + this._monitor.height)
-                    shouldHide = false;
-
-                break;
-            case St.Side.TOP:
-                if (x >= this._monitor.x &&
-                    x <= this._monitor.x + this._monitor.width &&
-                    y <= this._staticBox.y2 &&
-                    y >= this._monitor.y)
-                    shouldHide = false;
-
-                break;
-            case St.Side.BOTTOM:
-                if (x >= this._monitor.x &&
-                    x <= this._monitor.x + this._monitor.width &&
-                    y >= this._staticBox.y1 &&
-                    y <= this._monitor.y + this._monitor.height)
-                    shouldHide = false;
-            }
-            if (shouldHide) {
-                this._triggerTimeoutId = 0;
-                this._hoverChanged();
-                return GLib.SOURCE_REMOVE;
-            } else {
-                return GLib.SOURCE_CONTINUE;
-            }
-        });
-
-        this._show();
+        this._scheduleShow();
     }
 
     /**

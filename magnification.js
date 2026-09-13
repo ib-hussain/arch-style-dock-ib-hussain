@@ -169,7 +169,11 @@ export class Magnification {
             if (!icon || center === undefined)
                 continue;
             const d = Math.abs(pointerX - center);
-            const w = d < radius ? (1 - d / radius) ** 2 : 0;
+            // Gaussian falloff, matching the HTML mockup. At R=70, an
+            // adjacent icon (56 px away) gets weight ≈ 0.53 and the second
+            // neighbour (112 px) gets ≈ 0.08 — the "one or two visibly grow"
+            // behaviour that read as beautiful in the mockup.
+            const w = Math.exp(-((d / radius) ** 2));
             const scale = 1 + strength * w;
             const lift = liftPeak * w;
 
