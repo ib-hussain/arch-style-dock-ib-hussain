@@ -1,30 +1,33 @@
 // -*- mode: js; js-indent-level: 4; indent-tabs-mode: nil -*-
 
 import {Clutter} from './dependencies/gi.js';
-
+import {PointerWatcher} from './dependencies/shell/ui.js';
 import {Docking, Utils} from './imports.js';
 
 const Labels = Object.freeze({
-    MOTION: Symbol('magnification-motion'),
     SETTINGS: Symbol('magnification-settings'),
 });
 
-const ANIM_DURATION = 90;          // ms — must be fast enough to feel live
-const LIFT_FACTOR = 0.32;          // translation_y = -iconSize * LIFT_FACTOR * weight
+const WATCH_INTERVAL_MS = 40;   // ~25 Hz
+const ANIM_DURATION = 90;       // ms
+const LIFT_FACTOR = 0.32;       // peak lift = iconSize * LIFT_FACTOR * weight
 
 /**
- * macOS-style dock magnification.
+ * macOS-style dock magnification, driven by PointerWatcher.
  *
- * Design notes:
- *  - We hook `motion-event` on the dash's icon container, not on individual
- *    icons. One handler, N transforms per frame, no per-icon signal soup.
- *  - Weight function is (1 - d/R)^2 with a hard cutoff at R. Neighbours two
- *    slots away get weight ≈ 0.04 at R=70 — the "one or two adjacent icons
- *    barely move" behaviour that feels right.
- *  - Every actor transform is wrapped in try/catch. A bad frame must not take
- *    down the dock.
- *  - Settings reads use a safe getter that returns defaults if a key is
- *    missing or malformed.
+ * Why not `motion-event` on the dash container? On GNOME 50 the container
+ * is not reactive, so motion events only bubble from reactive children
+ * (individual app icons). Sweeping across the dock misses the gaps. The
+ * PointerWatcher polls the pointer at a fixed cadence and sees every frame.
+ *
+ * Weight function: (1 - d/R)^2 with a hard cutoff at R. At R=70 and normal
+ * icon pitches, the icon under the cursor peaks at 1+strength; the immediate
+ * neighbour gets ~4% extra; the second neighbour gets ~0. That's the "only
+ * one or two icons visibly grow" behaviour.
+ *
+ * Base centres are recomputed every frame from the layout (container.x +
+ * container.width/2) so they never include the icon's own scale. This is
+ * cheap — a dozen actors, two property reads each.
  */
 export class Magnification {
     constructor(dock) {
@@ -34,6 +37,8 @@ export class Magnification {
         this._active = false;
         this._icons = [];
         this._baseCenters = [];
+        this._pointerWatchId = 0;
+        this._frameErrorLogged = false;
 
         this._bindSettings();
         this._sync();
@@ -49,10 +54,6 @@ export class Magnification {
         this._dock = null;
     }
 
-    /* ------------------------------------------------------------------ */
-    /* Settings                                                            */
-    /* ------------------------------------------------------------------ */
-
     _settings() {
         return Docking.DockManager.settings;
     }
@@ -60,9 +61,9 @@ export class Magnification {
     _readBool(key, fallback) {
         try {
             const value = this._settings()[key];
-            return value === undefined || value === null ? fallback : Boolean(value);
-        } catch (e) {
-            console.warn(`[arch-style-dock] magnification: bad read of ${key}: ${e}`);
+            return value === undefined || value === null
+                ? fallback : Boolean(value);
+        } catch {
             return fallback;
         }
     }
@@ -71,8 +72,7 @@ export class Magnification {
         try {
             const value = Number(this._settings()[key]);
             return Number.isFinite(value) ? value : fallback;
-        } catch (e) {
-            console.warn(`[arch-style-dock] magnification: bad read of ${key}: ${e}`);
+        } catch {
             return fallback;
         }
     }
@@ -82,14 +82,12 @@ export class Magnification {
         ['magnification-enabled',
          'magnification-strength',
          'magnification-radius',
-         'dash-max-icon-size',
         ].forEach(key => {
             this._signalsHandler.addWithLabel(Labels.SETTINGS, settings,
                 `changed::${key}`, () => this._sync());
         });
-        // Icon list rebuilds whenever the dash repopulates.
         this._signalsHandler.addWithLabel(Labels.SETTINGS, this._dash,
-            'icon-size-changed', () => this._measure());
+            'destroy', () => this._disable());
     }
 
     _sync() {
@@ -100,32 +98,13 @@ export class Magnification {
             this._disable();
     }
 
-    /* ------------------------------------------------------------------ */
-    /* Lifecycle                                                           */
-    /* ------------------------------------------------------------------ */
-
     _enable() {
         if (this._active)
             return;
-
         this._active = true;
-
         try {
-            const container = this._dash._dashContainer;
-            if (!container) {
-                console.warn('[arch-style-dock] magnification: dash container not ready');
-                this._active = false;
-                return;
-            }
-
-            this._signalsHandler.addWithLabel(Labels.MOTION, container,
-                'motion-event', () => this._onMotion());
-            this._signalsHandler.addWithLabel(Labels.MOTION, container,
-                'leave-event', () => this._reset());
-            this._signalsHandler.addWithLabel(Labels.MOTION, this._dash,
-                'destroy', () => this._disable());
-
-            this._measure();
+            this._pointerWatchId = PointerWatcher.getPointerWatcher().addWatch(
+                WATCH_INTERVAL_MS, () => this._frame());
         } catch (e) {
             console.error(`[arch-style-dock] magnification enable failed: ${e}`);
             this._active = false;
@@ -135,63 +114,43 @@ export class Magnification {
     _disable() {
         if (!this._active)
             return;
-
         this._active = false;
         try {
-            this._signalsHandler.removeWithLabel(Labels.MOTION);
+            if (this._pointerWatchId) {
+                PointerWatcher.getPointerWatcher()._removeWatch(this._pointerWatchId);
+                this._pointerWatchId = 0;
+            }
             this._reset();
         } catch (e) {
             console.error(`[arch-style-dock] magnification disable failed: ${e}`);
         }
     }
 
-    /* ------------------------------------------------------------------ */
-    /* Geometry                                                            */
-    /* ------------------------------------------------------------------ */
-
-    _measure() {
+    _frame() {
         if (!this._active)
             return;
-
         try {
-            const icons = this._dash.getAppIcons();
-            this._icons = icons;
-
-            // Scale factor: stage coordinates are in device pixels, pointer
-            // coordinates are physical pixels. Normalise both to logical.
-            // const scale = Clutter.get_default_text_direction && // sanity
-            //     St?.ThemeContext ? 1 : 1; // placeholder, see below
-
-            this._baseCenters = icons.map(icon => {
-                const [x] = icon.get_transformed_position();
-                const [w] = icon.get_transformed_size();
-                return x + w / 2;
-            });
-        } catch (e) {
-            console.error(`[arch-style-dock] magnification measure failed: ${e}`);
-            this._icons = [];
-            this._baseCenters = [];
-        }
-    }
-
-    /* ------------------------------------------------------------------ */
-    /* Frame                                                               */
-    /* ------------------------------------------------------------------ */
-
-    _onMotion() {
-        if (!this._active)
-            return Clutter.EVENT_PROPAGATE;
-
-        try {
+            this._measure();
             this._apply();
         } catch (e) {
-            // A bad frame must never break the dock or flood the log.
             if (!this._frameErrorLogged) {
                 this._frameErrorLogged = true;
                 console.error(`[arch-style-dock] magnification frame failed: ${e}`);
             }
         }
-        return Clutter.EVENT_PROPAGATE;
+    }
+
+    _measure() {
+        const box = this._dash._box;
+        if (!box)
+            return;
+        const containers = box.get_children().filter(c =>
+            c.child && c.child.icon && !c.animatingOut);
+        this._icons = containers.map(c => c.child);
+        const [boxX] = box.get_transformed_position();
+        // c.x and c.width are the layout position/size within `box`,
+        // i.e. they do NOT include the icon's own scale/translation.
+        this._baseCenters = containers.map(c => boxX + c.x + c.width / 2);
     }
 
     _apply() {
@@ -204,24 +163,17 @@ export class Magnification {
         const iconSize = this._readNumber('dashMaxIconSize', 48);
         const liftPeak = iconSize * LIFT_FACTOR;
 
-        // Recompute base centers only if the icon list changed size.
-        // (get_transformed_position during animation includes the current
-        // scale, which would feed back into itself — so we do a fresh read
-        // only when we're idle. In steady state the baseCenters cached at
-        // measure() are correct.)
         for (let i = 0; i < this._icons.length; i++) {
             const icon = this._icons[i];
             const center = this._baseCenters[i];
             if (!icon || center === undefined)
                 continue;
-
             const d = Math.abs(pointerX - center);
             const w = d < radius ? (1 - d / radius) ** 2 : 0;
             const scale = 1 + strength * w;
             const lift = liftPeak * w;
 
             icon.set_pivot_point(0.5, 1.0);
-            icon.remove_all_transitions();
             icon.ease({
                 scale_x: scale,
                 scale_y: scale,
@@ -240,7 +192,6 @@ export class Magnification {
                 continue;
             try {
                 icon.set_pivot_point(0.5, 1.0);
-                icon.remove_all_transitions();
                 icon.ease({
                     scale_x: 1,
                     scale_y: 1,
@@ -249,9 +200,8 @@ export class Magnification {
                     mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                 });
             } catch {
-                // Actor may have been destroyed mid-frame.
+                // Actor may have been destroyed mid-frame; ignore.
             }
         }
     }
 }
-
