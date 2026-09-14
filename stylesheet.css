@@ -2090,13 +2090,13 @@
  * `#dashtodockContainer.dashtodock #dash .dash-background { background: rgb(...) }`
  * rule so we cleanly beat it. Do NOT lower this selector. */
 #dashtodockContainer.dashtodock #dash .dash-background {
-  background-color: rgba(224, 210, 238, 0.55); /* Mode C: lavender frosted */
+  background-color: rgba(83, 83, 83, 0.35); /* graphite glass */
   background-image: none;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   box-shadow:
-    0 12px 36px rgba(46, 27, 65, 0.35),
-    0 1px 0 rgba(255, 255, 255, 0.5) inset,
-    0 -1px 0 rgba(46, 27, 65, 0.15) inset;
+    0 12px 36px rgba(0, 0, 0, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.18) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.15) inset;
 }
 
 /* Mode A (alternate): frosted glass — engaged via the .arch-theme-frosted
