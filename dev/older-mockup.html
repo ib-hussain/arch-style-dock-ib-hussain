@@ -22,13 +22,10 @@
     transition: background 0.4s ease;
   }
   body[data-wallpaper="colorful"] {
-    background:radial-gradient(
-        circle at 20% 20%,
-      rgb(196, 255, 250) 0%, 
-      rgba(255, 237, 188, 1) 30%, 
-      rgba(236, 217, 255, 1) 55%, 
-      rgba(202, 224, 255, 1) 80%
-  );
+    background-image: url('26-Tahoe-Light-6K.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
   }
   body[data-wallpaper="mono"] {
     background: linear-gradient(135deg, #1a1a1f 0%, #0a0a0c 100%);
@@ -113,10 +110,10 @@
   }
 
   /* --- A: Big Sur / Sonoma frosted glass --- */
-  html[data-mode="A"] .dock {
-    background: rgba(255, 255, 255, 0.13);
-    backdrop-filter: blur(28px) saturate(180%);
-    -webkit-backdrop-filter: blur(28px) saturate(180%);
+  html[data-mode="C"] .dock {
+    background: rgba(255, 255, 255, 0.07);
+    backdrop-filter: blur(13px) ;
+    -webkit-backdrop-filter: blur(13px) ;
     border: 1px solid rgba(255, 255, 255, 0.22);
     box-shadow:
       0 12px 36px rgba(0, 0, 0, 0.35),
@@ -145,7 +142,7 @@
   }
 
   /* --- C: Navbar lavender frosted (from example_dock/navbar.css .scrolled) --- */
-  html[data-mode="C"] .dock {
+  html[data-mode="A"] .dock {
     background: rgba(224, 210, 238, 0.55);
     backdrop-filter: blur(24px) saturate(150%);
     -webkit-backdrop-filter: blur(24px) saturate(150%);
