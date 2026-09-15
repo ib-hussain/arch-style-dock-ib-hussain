@@ -11,20 +11,21 @@ const LOG_PREFIX = '[arch-style-dock@ib-hussain]';
 const CONFLICTING_DOCKS = Object.freeze([
     'ubuntu-dock@ubuntu.com',
     'dash-to-dock@micxgx.gmail.com',
+    'rice-dock@ib-hussain',
 ]);
 const ACTIVE_STATES = new Set([
-    ExtensionUtils.ExtensionState.ACTIVE,
-    ExtensionUtils.ExtensionState.ACTIVATING,
-]);
+    ExtensionUtils.ExtensionState.ACTIVE ?? ExtensionUtils.ExtensionState.ENABLED,
+    ExtensionUtils.ExtensionState.ACTIVATING ?? ExtensionUtils.ExtensionState.ENABLING,
+].filter(state => state !== undefined));
 
 // Exported for compatibility with the Dash-to-Dock module layout.
 export let dockManager = null;
 
 function errorDetails(error) {
-    return error?.stack ?? error?.message ?? String(error);
+    return String(error?.stack ?? error?.message ?? error).replace(/\s+/g, ' ');
 }
 
-export default class RiceDockExtension extends Extension.Extension {
+export default class ArchStyleDockExtension extends Extension.Extension {
     enable() {
         const phase = (name, fn) => {
             try {
@@ -36,6 +37,8 @@ export default class RiceDockExtension extends Extension.Extension {
             }
         };
 
+        if (this._enabled)
+            return;
         this._enabled = true;
         this._extensionListenerId = 0;
         this._shutdownId = 0;
@@ -44,7 +47,7 @@ export default class RiceDockExtension extends Extension.Extension {
             phase('logo-check', () => {
                 const logoFile = Gio.File.new_for_path(`${this.path}/media/logo.png`);
                 if (!logoFile.query_exists(null))
-                    throw new Error(`Required logo is missing: ${logoFile.get_path()}`);
+                    console.log(`${LOG_PREFIX} logo=apps-grid.svg (custom logo.png absent)`);
             });
 
             phase('extension-listener', () => {
@@ -68,14 +71,13 @@ export default class RiceDockExtension extends Extension.Extension {
             });
 
             console.log(
-                `${LOG_PREFIX} enabling on GNOME ${Config.PACKAGE_VERSION}; ` +
-                `logo=${this.path}/media/logo.png`);
+                `${LOG_PREFIX} release=${this.metadata['version-name']} ` +
+                `gnome=${Config.PACKAGE_VERSION} session-start=${new Date().toISOString()}`);
 
             phase('dock-manager', () => this._conditionallyEnableDock());
 
             console.log(`${LOG_PREFIX} phase=enable result=ok`);
         } catch (error) {
-            this._enabled = false;
             try {
                 this.disable();
             } catch { /* best effort */ }
@@ -114,6 +116,8 @@ export default class RiceDockExtension extends Extension.Extension {
             dockManager = new DockManager(this);
             console.log(`${LOG_PREFIX} dock manager started`);
         } catch (error) {
+            // Constructors can fail after installing signals/injections.
+            DockManager.getDefault()?.destroy();
             dockManager = null;
             console.error(
                 `${LOG_PREFIX} dock manager failed to start: ${errorDetails(error)}`);
@@ -122,9 +126,6 @@ export default class RiceDockExtension extends Extension.Extension {
     }
 
     disable() {
-        if (!this._enabled && !dockManager)
-            return;
-
         this._enabled = false;
 
         if (this._shutdownId) {

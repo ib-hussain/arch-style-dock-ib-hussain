@@ -1,0 +1,6 @@
+<!-- Original fallback artwork, GPL-2.0-or-later. Custom media/logo.png takes precedence. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs><linearGradient id="tile" x2="0" y2="1"><stop stop-color="#60b5ef"/><stop offset="1" stop-color="#2163b0"/></linearGradient></defs>
+  <rect x="7" y="7" width="114" height="114" rx="26" fill="url(#tile)"/>
+  <g fill="#fff"><rect x="29" y="29" width="18" height="18" rx="5"/><rect x="55" y="29" width="18" height="18" rx="5"/><rect x="81" y="29" width="18" height="18" rx="5"/><rect x="29" y="55" width="18" height="18" rx="5"/><rect x="55" y="55" width="18" height="18" rx="5"/><rect x="81" y="55" width="18" height="18" rx="5"/><rect x="29" y="81" width="18" height="18" rx="5"/><rect x="55" y="81" width="18" height="18" rx="5"/><rect x="81" y="81" width="18" height="18" rx="5"/></g>
+</svg>

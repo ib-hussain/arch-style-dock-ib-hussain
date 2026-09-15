@@ -67,7 +67,7 @@ const MonitorsConfig = GObject.registerClass({
         );
 
         // Connecting to a D-Bus signal
-        this._monitorsConfigProxy.connectSignal('MonitorsChanged',
+        this._monitorSignal = this._monitorsConfigProxy.connectSignal('MonitorsChanged',
             () => this._updateResources());
 
         this._primaryMonitor = null;
@@ -79,12 +79,16 @@ const MonitorsConfig = GObject.registerClass({
 
     _updateResources() {
         this._monitorsConfigProxy.GetCurrentStateRemote((resources, err) => {
+            if (this._destroyed)
+                return;
             if (err) {
                 logError(err);
                 return;
             }
 
             const [serial_, monitors, logicalMonitors] = resources;
+            this._monitors = [];
+            this._primaryMonitor = null;
             let index = 0;
             for (const monitor of monitors) {
                 const [monitorSpecs, modes_, props] = monitor;
@@ -119,6 +123,7 @@ const MonitorsConfig = GObject.registerClass({
             }
 
             const activeMonitors = this._monitors.filter(m => m.active);
+            this._primaryMonitor ??= activeMonitors[0] ?? this._monitors[0] ?? null;
             if (activeMonitors.length > 1 && logicalMonitors.length === 1) {
                 // We're in cloning mode, so let's just activate the primary monitor
                 this._monitors.forEach(m => (m.active = false));
@@ -135,6 +140,8 @@ const MonitorsConfig = GObject.registerClass({
         // for monitors, it can be removed when we don't care about breaking
         // old user configurations or external apps configuring this extension
         // such as ubuntu's gnome-control-center.
+        if (!this._primaryMonitor)
+            return;
         const {index: primaryMonitorIndex} = this._primaryMonitor;
         for (const monitor of this._monitors) {
             let {index} = monitor;
@@ -148,6 +155,13 @@ const MonitorsConfig = GObject.registerClass({
 
             monitor.index = index;
         }
+    }
+
+    destroy() {
+        if (this._destroyed)
+            return;
+        this._destroyed = true;
+        this._monitorsConfigProxy.disconnectSignal(this._monitorSignal);
     }
 
     get primaryMonitor() {
@@ -206,11 +220,26 @@ const DockSettings = GObject.registerClass({
         this._icon_size_timeout = 0;
         this._opacity_timeout = 0;
 
+        this._settingsSignals = [];
         this._monitorsConfig = new MonitorsConfig();
         this._bindSettings();
+        this._buildMockupAppearance();
+    }
+
+    _connectSettings(signal, callback) {
+        const id = this._settings.connect(signal, callback);
+        this._settingsSignals.push(id);
+        return id;
     }
 
     _onWindowsClosed() {
+        for (const id of this._settingsSignals)
+            this._settings.disconnect(id);
+        this._settingsSignals = [];
+        if (this._monitorsUpdatedId)
+            this._monitorsConfig.disconnect(this._monitorsUpdatedId);
+        this._monitorsUpdatedId = 0;
+        this._monitorsConfig.destroy();
         if (this._dock_size_timeout) {
             GLib.source_remove(this._dock_size_timeout);
             delete this._dock_size_timeout;
@@ -225,6 +254,76 @@ const DockSettings = GObject.registerClass({
             GLib.source_remove(this._opacity_timeout);
             delete this._opacity_timeout;
         }
+    }
+
+    _buildMockupAppearance() {
+        const appearance = this._builder.get_object('appearance');
+        for (let child = appearance.get_first_child(); child; child = child.get_next_sibling())
+            child.hide();
+        const box = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL, spacing: 18});
+        appearance.prepend(box);
+        box.append(new Gtk.Label({
+            label: __('Graphite dock'), xalign: 0, css_classes: ['title-2'],
+        }));
+        box.append(new Gtk.Label({
+            label: __('Icons grow together with their neighbours. The hovered icon also makes room on both sides.'),
+            xalign: 0, wrap: true,
+        }));
+        const row = (label, control) => {
+            const line = new Gtk.Box({spacing: 24});
+            line.append(new Gtk.Label({label: __(label), xalign: 0, hexpand: true}));
+            line.append(control);
+            box.append(line);
+        };
+        const enabled = new Gtk.Switch({valign: Gtk.Align.CENTER});
+        this._settings.bind('magnification-enabled', enabled, 'active', Gio.SettingsBindFlags.DEFAULT);
+        row('Magnify icons on hover', enabled);
+        const number = (key, label, min, max, step) => {
+            const spin = new Gtk.SpinButton({
+                adjustment: new Gtk.Adjustment({lower: min, upper: max, step_increment: step}),
+                digits: 2, numeric: true, valign: Gtk.Align.CENTER,
+            });
+            this._settings.bind(key, spin, 'value', Gio.SettingsBindFlags.DEFAULT);
+            row(label, spin);
+            return spin;
+        };
+        const strength = number('magnification-strength', 'Magnification increase (0.50 = 1.5×)', 0, 1.5, 0.05);
+        this._settings.bind('magnification-enabled', strength, 'sensitive', Gio.SettingsBindFlags.GET);
+        number('dock-roundness', 'Corner radius / icon size', 0.30, 0.95, 0.01);
+        const running = new Gtk.ComboBoxText();
+        ['Default', 'Dots', 'Squares', 'Dashes', 'Segmented', 'Solid', 'Ciliora', 'Metro', 'Binary', 'Dot']
+            .forEach(label => running.append_text(__(label)));
+        running.set_active(this._settings.get_enum('running-indicator-style'));
+        running.connect('changed', () => this._settings.set_enum('running-indicator-style', running.get_active()));
+        this._connectSettings('changed::running-indicator-style', () => {
+            const value = this._settings.get_enum('running-indicator-style');
+            if (running.get_active() !== value)
+                running.set_active(value);
+        });
+        row('Running indicators', running);
+        const dots = new Gtk.Button({label: __('Indicator colours…')});
+        dots.connect('clicked', () => this._builder.get_object('running_indicators_advance_settings_button').emit('clicked'));
+        box.append(dots);
+        box.append(new Gtk.Label({
+            label: __('Translucent graphite with softly rounded corners.'),
+            xalign: 0, wrap: true, css_classes: ['dim-label'],
+        }));
+        const reset = new Gtk.Button({label: __('Use mockup appearance')});
+        reset.connect('clicked', () => {
+            // Only visual values change. Position, favourites and hiding preferences stay yours.
+            this._settings.set_int('dash-max-icon-size', 50);
+            this._settings.set_double('dock-roundness', 0.32);
+            this._settings.set_boolean('magnification-enabled', true);
+            this._settings.set_double('magnification-strength', 0.5);
+            this._settings.set_enum('running-indicator-style', 1);
+            this._settings.set_boolean('apply-custom-theme', false);
+            this._settings.set_boolean('unity-backlit-items', false);
+            this._settings.set_boolean('custom-theme-customize-running-dots', true);
+            this._settings.set_string('custom-theme-running-dots-color', 'rgb(192,191,188)');
+            this._settings.set_string('custom-theme-running-dots-border-color', 'rgb(255,255,255)');
+            this._settings.set_int('custom-theme-running-dots-border-width', 1);
+        });
+        box.append(reset);
     }
 
     vfunc_create_closure(builder, handlerName, flags, connectObject) {
@@ -409,11 +508,11 @@ const DockSettings = GObject.registerClass({
         // Position and size panel
 
         this._updateMonitorsSettings();
-        this._monitorsConfig.connect('updated',
+        this._monitorsUpdatedId = this._monitorsConfig.connect('updated',
             () => this._updateMonitorsSettings());
-        this._settings.connect('changed::preferred-monitor',
+        this._connectSettings('changed::preferred-monitor',
             () => this._updateMonitorsSettings());
-        this._settings.connect('changed::preferred-monitor-by-connector',
+        this._connectSettings('changed::preferred-monitor-by-connector',
             () => this._updateMonitorsSettings());
 
         // Position option
@@ -739,7 +838,7 @@ const DockSettings = GObject.registerClass({
         notificationsCounterCheck.bind_property('active',
             applicationsOverrideCounter, 'sensitive',
             GObject.BindingFlags.SYNC_CREATE);
-        this._settings.connect('changed::show-icons-emblems', () => {
+        this._connectSettings('changed::show-icons-emblems', () => {
             if (this._settings.get_boolean('show-icons-emblems'))
                 applicationsOverrideCounter.sensitive = notificationsCounterCheck.active;
             else
@@ -834,7 +933,7 @@ const DockSettings = GObject.registerClass({
                 this._settings.get_boolean('hotkeys-show-dock'));
 
             // We need to update the shortcut 'strv' when the text is modified
-            this._settings.connect('changed::shortcut-text', () => setShortcut(this._settings));
+            this._connectSettings('changed::shortcut-text', () => setShortcut(this._settings));
             this._settings.bind('shortcut-text',
                 this._builder.get_object('shortcut_entry'),
                 'text',
@@ -961,7 +1060,7 @@ const DockSettings = GObject.registerClass({
         if (this._settings.get_enum('running-indicator-style') === RunningIndicatorStyle.DEFAULT)
             this._builder.get_object('running_indicators_advance_settings_button').set_sensitive(false);
 
-        this._settings.connect('changed::running-indicator-style', () => {
+        this._connectSettings('changed::running-indicator-style', () => {
             if (this._settings.get_enum('running-indicator-style') === RunningIndicatorStyle.DEFAULT)
                 this._builder.get_object('running_indicators_advance_settings_button').set_sensitive(false);
             else
@@ -1064,7 +1163,7 @@ const DockSettings = GObject.registerClass({
         if (this._settings.get_enum('transparency-mode') !== TransparencyMode.FIXED)
             this._builder.get_object('custom_opacity_scale').set_sensitive(false);
 
-        this._settings.connect('changed::transparency-mode', () => {
+        this._connectSettings('changed::transparency-mode', () => {
             if (this._settings.get_enum('transparency-mode') !== TransparencyMode.FIXED)
                 this._builder.get_object('custom_opacity_scale').set_sensitive(false);
             else
@@ -1075,7 +1174,7 @@ const DockSettings = GObject.registerClass({
             this._builder.get_object('dynamic_opacity_button').set_sensitive(false);
 
 
-        this._settings.connect('changed::transparency-mode', () => {
+        this._connectSettings('changed::transparency-mode', () => {
             if (this._settings.get_enum('transparency-mode') !== TransparencyMode.DYNAMIC)
                 this._builder.get_object('dynamic_opacity_button').set_sensitive(false);
 
@@ -1165,7 +1264,7 @@ const DockSettings = GObject.registerClass({
         // About Panel
 
         this._builder.get_object('extension_version').set_label(
-            `${this._extensionPreferences.metadata.version}`);
+            `${this._extensionPreferences.metadata['version-name'] ?? this._extensionPreferences.metadata.version}`);
     }
 });
 

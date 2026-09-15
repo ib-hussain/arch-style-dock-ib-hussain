@@ -51,6 +51,7 @@ class DockDashItemContainer extends Dash.DashItemContainer {
         super._init();
 
         this.label?.add_style_class_name(Theming.PositionStyleClass[position]);
+        this.label?.add_style_class_name('arch-dock-label');
         if (Docking.DockManager.settings.customThemeShrink)
             this.label?.add_style_class_name('shrink');
     }
@@ -73,12 +74,7 @@ class DockDashItemContainer extends Dash.DashItemContainer {
             opacity: 255,
             duration: animate ? DASH_ANIMATION_TIME : 0,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            onComplete: () => {
-                // when the animation is ended, we simulate
-                // a hover to gain back focus and unblur the
-                // background
-                this.set_hover(true);
-            },
+            onComplete: () => this.sync_hover(),
         });
     }
 });
@@ -134,6 +130,7 @@ export const DockDash = GObject.registerClass({
         'menu-opened': {},
         'menu-closed': {},
         'icon-size-changed': {},
+        'icons-changed': {},
     },
 }, class DockDash extends St.Widget {
     _init(monitorIndex) {
@@ -332,6 +329,11 @@ export const DockDash = GObject.registerClass({
             GLib.source_remove(this._ensureActorVisibilityTimeoutId);
             delete this._ensureActorVisibilityTimeoutId;
         }
+        for (const key of ['_showLabelTimeoutId', '_resetHoverTimeoutId']) {
+            if (this[key])
+                GLib.source_remove(this[key]);
+            this[key] = 0;
+        }
     }
 
 
@@ -515,6 +517,9 @@ export const DockDash = GObject.registerClass({
 
     _createAppItem(app) {
         const appIcon = new AppIcons.makeAppIcon(app, this._monitorIndex, this.iconAnimator);
+        appIcon._archDockTrash = app === Docking.DockManager.getDefault().trash?.getApp();
+        if (appIcon._archDockTrash)
+            appIcon.add_style_class_name('arch-dock-trash');
 
         if (appIcon._draggable) {
             appIcon._draggable.connect('drag-begin', () => {
@@ -660,6 +665,17 @@ export const DockDash = GObject.registerClass({
             availSpace = maxContent.get_height();
 
         const spacing = themeNode.get_length('spacing');
+        // Reserve the largest hovered margin before choosing an icon size.
+        // Resizing the row during hover must not make icon sizes oscillate.
+        if (Docking.DockManager.settings.magnificationEnabled) {
+            const {settings} = Docking.DockManager;
+            const factor = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+            availSpace -= (26 * settings.dashMaxIconSize / 50 *
+                settings.magnificationStrength / 0.5 +
+                2 * (Math.ceil(settings.dashMaxIconSize * settings.magnificationStrength * 0.2) + 1)) * factor;
+        }
+        if (iconChildren.some(item => item.child?._archDockTrash))
+            availSpace -= 42 * St.ThemeContext.get_for_stage(global.stage).scale_factor;
 
         const [{child: firstButton}] = iconChildren;
         const {child: firstIcon} = firstButton?.icon ?? {child: null};
@@ -982,6 +998,7 @@ export const DockDash = GObject.registerClass({
         this._updateNumberOverlay();
 
         this.updateShowAppsButton();
+        this.emit('icons-changed');
     }
 
     _updateNumberOverlay() {
@@ -1058,11 +1075,13 @@ export const DockDash = GObject.registerClass({
     showShowAppsButton() {
         this._showAppsIcon.visible = true;
         this._showAppsIcon.show(true);
+        this.emit('icons-changed');
         this.updateShowAppsButton();
     }
 
     hideShowAppsButton() {
         this._showAppsIcon.visible = false;
+        this.emit('icons-changed');
     }
 
     get maxWidth() {
@@ -1132,6 +1151,7 @@ export const DockDash = GObject.registerClass({
             if (!notifiedProperties.includes('last-child'))
                 showAppsContainer.notify('last-child');
         }
+        this.emit('icons-changed');
     }
 });
 

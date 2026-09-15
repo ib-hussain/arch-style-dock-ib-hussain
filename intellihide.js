@@ -105,6 +105,8 @@ export class Intellihide {
     }
 
     enable() {
+        if (this._isEnabled)
+            return;
         this._isEnabled = true;
         this._status = OverlapStatus.UNDEFINED;
         global.get_window_actors().forEach(function (wa) {
@@ -133,7 +135,7 @@ export class Intellihide {
     }
 
     _addWindowSignals(wa) {
-        if (!this._handledWindow(wa))
+        if (!this._isEnabled || this._trackedWindows.has(wa) || !this._handledWindow(wa))
             return;
 
         this._trackedWindows.set(wa, [

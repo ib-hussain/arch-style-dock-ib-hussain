@@ -1,0 +1,10 @@
+{
+  "name": "arch-style-dock",
+  "private": true,
+  "type": "module",
+  "version": "0.2.0",
+  "scripts": {
+    "test": "node --experimental-vm-modules --test tests/*.test.mjs",
+    "validate": "python3 tools/validate.py"
+  }
+}

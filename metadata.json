@@ -1,12 +1,16 @@
 {
-  "shell-version": ["45", "46", "47", "48", "49", "50", "51"],
+  "shell-version": [
+    "48",
+    "49",
+    "50"
+  ],
   "uuid": "arch-style-dock@ib-hussain",
   "name": "Arch Style Dock",
-  "description": "A macOS-style glossy dock for GNOME, built for Arch and Ubuntu. Fork of Dash-to-Dock by Ibrahim Hussain.",
+  "description": "Graphite dock with coordinated icon magnification for GNOME on Arch and Ubuntu. Based on Dash-to-Dock.",
   "settings-schema": "org.gnome.shell.extensions.arch-style-dock",
   "original-author": "micxgx@gmail.com",
   "url": "https://github.com/ib-hussain/arch-style-dock",
   "gettext-domain": "archstyledock",
-  "version": 1,
-  "version-name": "0.1.0"
+  "version": 2,
+  "version-name": "0.2.0"
 }

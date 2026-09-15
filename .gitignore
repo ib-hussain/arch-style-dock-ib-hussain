@@ -1,0 +1,11 @@
+*temp*.*
+*.compiled
+
+pictures/
+
+*.zip
+SHA256SUMS
+ignore**
+
+**cache**
+**cache**/

@@ -1452,6 +1452,7 @@ export const DockShowAppsIcon = GObject.registerClass({
             this._removeMenuTimeout(...args);
 
         this.label?.add_style_class_name(Theming.PositionStyleClass[position]);
+        this.label?.add_style_class_name('arch-dock-label');
         if (Docking.DockManager.settings.customThemeShrink)
             this.label?.add_style_class_name('shrink');
 
@@ -1466,7 +1467,9 @@ export const DockShowAppsIcon = GObject.registerClass({
 
     _createIcon(size) {
         const {extension} = Docking.DockManager;
-        const logoFile = Gio.File.new_for_path(`${extension.path}/media/logo.png`);
+        let logoFile = Gio.File.new_for_path(`${extension.path}/media/logo.png`);
+        if (!logoFile.query_exists(null))
+            logoFile = Gio.File.new_for_path(`${extension.path}/media/apps-grid.svg`);
         const logo = new Gio.FileIcon({file: logoFile});
 
         // Construct one icon with one content source. The previous rice used a
@@ -1609,7 +1612,7 @@ export function itemShowLabel() {
     /* eslint-disable no-invalid-this */
     // Check if the label is still present at all. When switching workspace, the
     // item might have been destroyed in between.
-    if (!this._labelText || !this.label.get_stage())
+    if (!this._labelText || !this.label?.get_stage())
         return;
 
     this.label.set_text(this._labelText);
@@ -1662,10 +1665,10 @@ export function itemShowLabel() {
     // Leave a few pixel gap
     const gap = 5;
     const monitor = Main.layoutManager.findMonitorForActor(this);
-    if (x - monitor.x < gap)
-        x += monitor.x - x + labelOffset;
-    else if (x + labelWidth > monitor.x + monitor.width - gap)
-        x -= x + labelWidth - (monitor.x + monitor.width) + gap;
+    if (!monitor)
+        return;
+    x = Math.max(monitor.x + gap, Math.min(x, monitor.x + monitor.width - labelWidth - gap));
+    y = Math.max(monitor.y + gap, Math.min(y, monitor.y + monitor.height - labelHeight - gap));
 
     this.label.remove_all_transitions();
     this.label.set_position(x, y);

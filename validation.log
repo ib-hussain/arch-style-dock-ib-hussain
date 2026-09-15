@@ -1,0 +1,62 @@
+PASS: JavaScript syntax and local imports (26 files)
+PASS: Python helper syntax
+PASS: schema compilation, override and metadata identity
+PASS: GtkBuilder XML, IDs and signal-handler contracts
+PASS: SCSS/CSS reproducibility and required assets
+(node:223) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ real dock policy retains intellihide-only mode and excludes neighbouring monitors (24.593316ms)
+✔ real hide path reverses a showing animation without adding a second delay (24.368746ms)
+✔ drag and menu latches clear independently and refresh the real controller (11.174559ms)
+✔ key-focus updates coalesce until the popup has reported its menu state (26.064784ms)
+(node:224) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ missing custom logo uses fallback and enable/disable are idempotent (30.186577ms)
+✔ failed startup releases manager, extension listener and shutdown listener (20.339399ms)
+✔ conflicting dock suspends this extension, then resumes exactly once (12.58349ms)
+✔ ten activation cycles do not accumulate listeners (13.156124ms)
+(node:225) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ production adapter animates images and spacing together, including Show Applications (56.855558ms)
+✔ trash keeps its separate size, separator spacing and shorter image transition (11.512953ms)
+✔ closing a menu does not resume magnification during an active drag (10.098005ms)
+✔ no magnification across the desktop at the same x coordinate (16.517648ms)
+✔ monitor scale and vertical orientation affect margins and lift (7.176331ms)
+✔ reduced motion applies final state with zero-duration transitions (7.559051ms)
+✔ keyboard focus uses the same profile and menus/drag/hiding reset it (7.015001ms)
+✔ texture replacement, app removal, disable and repeated destroy leave no subscriptions or idle work (11.555652ms)
+✔ mockup scale and effective CSS translation, including both boundaries (8.367049ms)
+✔ all sides lift away from the edge and scale dimensions with icon size (1.474673ms)
+✔ strength zero removes scale, translation and spacing together (0.409401ms)
+✔ edge wake is bounded to its monitor on all four sides (0.735134ms)
+✔ hidden dock cannot wake over its old rectangle; negative monitor coordinates work (0.472353ms)
+✔ visibility policy covers modes, interactions, pressure, modal and fullscreen (1.345894ms)
+✔ 3-second show and hide delays are applied exactly once, with a stationary pointer (1.683205ms)
+✔ repeated restacks do not restart or bypass the pending deadline (0.78839ms)
+✔ stale pointer state is rechecked at expiry even without watcher notifications (1.39433ms)
+✔ opening menu cancels pending hide; closing it starts one fresh delay (3.148872ms)
+✔ rapid reversal cancels pending show and destruction removes timer id zero (0.565735ms)
+✔ failed apply remains retryable (1.550487ms)
+(node:227) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ graphite and dynamic radius survive old theme settings; shelf and hover space are separate (29.22094ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 609.556936
+..........
+----------------------------------------------------------------------
+Ran 10 tests in 0.011s
+
+OK
+PASS: automated validation complete. Live GNOME compositor acceptance is still required.
+Package: /workspace/scratch/3b771442d718/arch-style-dock/dist/arch-style-dock@ib-hussain.shell-extension.zip
+PASS: isolated installer dry run staged the extension; installed files and desktop settings were not changed.
+PASS: runtime ZIP CRC, 41 unique safe paths, required files and source-byte identity.
+PASS: eight effective defaults read from the packaged compiled schema using GSettings memory backend.
+PASS: correctness lint on all 26 runtime JavaScript files.
+UNVERIFIED: live GNOME compositor rendering, GTK preferences and desktop acceptance.
